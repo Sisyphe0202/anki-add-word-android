@@ -38,6 +38,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 
-    // AnkiDroid API (via JitPack, submodule `api/`)
-    implementation("com.github.ankidroid.Anki-Android:api:api-v1.1.0")
+    // AnkiDroid API (via JitPack)
+    implementation("com.github.ankidroid:Anki-Android:api-v1.1.0")
 }
