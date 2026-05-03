@@ -24,6 +24,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnFetch: Button
     private lateinit var btnSave: Button
     private lateinit var btnClear: Button
+    private lateinit var btnRefreshDecks: Button
     private lateinit var tvStatus: TextView
 
     private val ankiPerm = "com.ichi2.anki.permission.READ_WRITE_DATABASE"
@@ -39,11 +40,13 @@ class MainActivity : AppCompatActivity() {
         btnFetch = findViewById(R.id.btnFetch)
         btnSave = findViewById(R.id.btnSave)
         btnClear = findViewById(R.id.btnClear)
+        btnRefreshDecks = findViewById(R.id.btnRefreshDecks)
         tvStatus = findViewById(R.id.tvStatus)
 
         btnFetch.setOnClickListener { doFetch() }
         btnSave.setOnClickListener { doSave() }
         btnClear.setOnClickListener { doClear() }
+        btnRefreshDecks.setOnClickListener { refreshDecks() }
 
         requestAnkiPermissionIfNeeded()
     }
@@ -71,9 +74,21 @@ class MainActivity : AppCompatActivity() {
             status("没检测到 AnkiDroid，请先装 AnkiDroid", true); return
         }
         bridge = b
-        val decks = b.topLevelDecks()
+        refreshDecks()
+    }
+
+    private fun refreshDecks() {
+        val b = bridge ?: return
+        val decks = try { b.topLevelDecks() } catch (e: Exception) {
+            status("读取牌组失败: ${e.message}", true); return
+        }
         acDeck.setAdapter(ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, decks))
-        if (decks.isNotEmpty()) acDeck.setText(decks.first(), false)
+        if (decks.isEmpty()) {
+            status("未读到牌组，请确认 AnkiDroid 已授权本应用，可手动填牌组名", true)
+        } else {
+            if (acDeck.text.isNullOrEmpty()) acDeck.setText(decks.first(), false)
+            status("读到 ${decks.size} 个牌组")
+        }
     }
 
     private fun doFetch() {

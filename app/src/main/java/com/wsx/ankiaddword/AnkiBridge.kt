@@ -31,6 +31,20 @@ class AnkiBridge(context: Context) {
         return mid to fields
     }
 
+    /** 找不到则自动建模型，返回 (modelId, fieldNames) 或 null */
+    private fun ensureModel(
+        name: String,
+        fields: Array<String>,
+        cards: Array<String>,
+        qfmt: Array<String>,
+        afmt: Array<String>
+    ): Pair<Long, Array<String>>? {
+        findModel(name)?.let { return it }
+        val mid = api.addNewCustomModel(name, fields, cards, qfmt, afmt, null, null, null)
+            ?: return null
+        return mid to fields
+    }
+
     /** 找或建牌组，返回 deckId；建牌失败时抛异常 */
     private fun ensureDeck(name: String): Long {
         val decks = api.deckList ?: emptyMap()
@@ -49,13 +63,25 @@ class AnkiBridge(context: Context) {
     fun addWord(word: String, kk: String, topDeck: String): Int {
         var ok = 0
 
-        findModel("问答题")?.let { (mid, fields) ->
+        ensureModel(
+            name = "问答题",
+            fields = arrayOf("正面", "背面"),
+            cards = arrayOf("卡片"),
+            qfmt = arrayOf("{{正面}}"),
+            afmt = arrayOf("{{FrontSide}}<hr id=answer>{{背面}}")
+        )?.let { (mid, fields) ->
             val map = buildFields(fields, mapOf("正面" to word, "背面" to kk))
             val did = ensureDeck("$topDeck::问答")
             if (api.addNote(mid, did, map, setOf(topDeck)) != null) ok++
         }
 
-        findModel("填空题+音频")?.let { (mid, fields) ->
+        ensureModel(
+            name = "填空题+音频",
+            fields = arrayOf("文字", "单词", "背面额外"),
+            cards = arrayOf("填空"),
+            qfmt = arrayOf("{{cloze:文字}}"),
+            afmt = arrayOf("{{cloze:文字}}<br>{{单词}}<br>{{背面额外}}")
+        )?.let { (mid, fields) ->
             val clozeText = "$kk ─ {{c1::$word}}"
             val map = buildFields(fields, mapOf("文字" to clozeText, "单词" to word, "背面额外" to ""))
             val did = ensureDeck("$topDeck::填空")
