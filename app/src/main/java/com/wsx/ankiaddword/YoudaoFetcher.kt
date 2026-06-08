@@ -62,7 +62,7 @@ object YoudaoFetcher {
     fun downloadAudio(word: String, out: File): Boolean {
         return try {
             val url = URL("https://dict.youdao.com/dictvoice?audio=${enc(word)}&type=2")
-            open(url).inputStream.use { input -> out.outputStream.use { input.copyTo(it) } }
+            open(url).inputStream.use { input -> out.outputStream().use { input.copyTo(it) } }
             out.length() > 0
         } catch (e: Exception) {
             false
