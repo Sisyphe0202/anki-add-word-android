@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 缓存目录下的发音 mp3，通过 FileProvider 临时共享给 AnkiDroid 读取 -->
+    <cache-path name="cache" path="." />
+</paths>

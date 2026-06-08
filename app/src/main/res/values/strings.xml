@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Anki 加词</string>
-    <string name="hint_word">英文单词</string>
+    <string name="hint_word">英文单词 / 词组</string>
     <string name="hint_kk">KK 音标（可编辑）</string>
+    <string name="hint_meaning">中文意思（可编辑）</string>
     <string name="hint_deck">顶级牌组（如 星期）</string>
-    <string name="btn_fetch">抓音标</string>
+    <string name="btn_fetch">抓取(音标+意思)</string>
     <string name="btn_save">保存 (问答+填空)</string>
     <string name="btn_clear">清空</string>
 </resources>

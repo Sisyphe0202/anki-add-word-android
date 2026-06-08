@@ -15,11 +15,13 @@ import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var etWord: TextInputEditText
     private lateinit var etKk: TextInputEditText
+    private lateinit var etMeaning: TextInputEditText
     private lateinit var acDeck: AutoCompleteTextView
     private lateinit var btnFetch: Button
     private lateinit var btnSave: Button
@@ -36,6 +38,7 @@ class MainActivity : AppCompatActivity() {
 
         etWord = findViewById(R.id.etWord)
         etKk = findViewById(R.id.etKk)
+        etMeaning = findViewById(R.id.etMeaning)
         acDeck = findViewById(R.id.acDeck)
         btnFetch = findViewById(R.id.btnFetch)
         btnSave = findViewById(R.id.btnSave)
@@ -96,12 +99,19 @@ class MainActivity : AppCompatActivity() {
         if (word.isEmpty()) { status("先填单词", true); return }
         status("抓取中…")
         lifecycleScope.launch {
-            val ipa = try { withContext(Dispatchers.IO) { YoudaoFetcher.fetchIpa(word) } }
+            val info = try { withContext(Dispatchers.IO) { YoudaoFetcher.lookup(word) } }
                 catch (e: Exception) { status("抓取失败: ${e.message}", true); return@launch }
-            if (ipa.isEmpty()) { status("没查到 IPA，手动填吧", true); return@launch }
-            val kk = IpaToKk.convert(ipa)
-            etKk.setText(kk)
-            status("IPA: $ipa  →  KK: $kk  （可手改）")
+            val kk = if (info.ipa.isNotEmpty()) IpaToKk.convert(info.ipa) else ""
+            if (kk.isNotEmpty()) etKk.setText(kk)
+            if (info.meaning.isNotEmpty()) etMeaning.setText(info.meaning)
+            status(
+                when {
+                    kk.isEmpty() && info.meaning.isEmpty() -> "没查到，手动填吧"
+                    kk.isEmpty() -> "意思: ${info.meaning}  （词组没音标，可手填）"
+                    else -> "KK: $kk   意思: ${info.meaning}  （可手改）"
+                },
+                warn = kk.isEmpty() && info.meaning.isEmpty()
+            )
         }
     }
 
@@ -109,20 +119,30 @@ class MainActivity : AppCompatActivity() {
         val b = bridge ?: run { status("AnkiDroid 未就绪", true); return }
         val word = etWord.text.toString().trim()
         val kk = etKk.text.toString().trim()
+        val meaning = etMeaning.text.toString().trim()
         val top = acDeck.text.toString().trim()
         when {
             word.isEmpty() -> { status("缺单词", true); return }
-            kk.isEmpty() -> { status("缺音标", true); return }
+            kk.isEmpty() && meaning.isEmpty() -> { status("缺音标和意思（至少填一个）", true); return }
             top.isEmpty() -> { status("缺牌组", true); return }
         }
         status("保存中…")
         lifecycleScope.launch {
-            val n = try { withContext(Dispatchers.IO) { b.addWord(word, kk, top) } }
+            // 下载发音并加入 AnkiDroid 媒体库；失败则不带音频继续
+            val sound = withContext(Dispatchers.IO) {
+                try {
+                    val safe = word.replace(Regex("[^A-Za-z0-9]+"), "_").trim('_')
+                    val f = File(cacheDir, "yd_$safe.mp3")
+                    if (YoudaoFetcher.downloadAudio(word, f)) b.addMedia(f, "yd_$safe") ?: "" else ""
+                } catch (e: Exception) { "" }
+            }
+            val n = try { withContext(Dispatchers.IO) { b.addWord(word, kk, meaning, sound, top) } }
                 catch (e: Exception) { status("保存失败: ${e.message}", true); return@launch }
+            val audioNote = if (sound.isNotEmpty()) "（含发音）" else "（无发音）"
             when (n) {
                 2 -> {
-                    status("✓ $word 已存入 $top::问答 和 $top::填空")
-                    etWord.text?.clear(); etKk.text?.clear(); etWord.requestFocus()
+                    status("✓ $word 已存入 $top::问答 和 $top::填空 $audioNote")
+                    etWord.text?.clear(); etKk.text?.clear(); etMeaning.text?.clear(); etWord.requestFocus()
                 }
                 1 -> status("⚠ 只写入 1 条（另一个模型可能缺失或重复）", true)
                 else -> status("✗ 没写入任何笔记（模型缺失？）", true)
@@ -134,7 +154,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun doClear() {
-        etWord.text?.clear(); etKk.text?.clear()
+        etWord.text?.clear(); etKk.text?.clear(); etMeaning.text?.clear()
         status("")
         etWord.requestFocus()
     }
