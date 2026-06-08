@@ -60,32 +60,29 @@ class AnkiBridge(context: Context) {
     }
 
     /**
-     * 把本地音频文件加入 AnkiDroid 媒体库，返回库内文件名（如 "give_up.mp3"），
-     * 失败返回 null。调用方据此拼 [sound:文件名]。
+     * 把本地音频文件加入 AnkiDroid 媒体库，返回库内文件名（如 "give_up.mp3"）。
+     * 任何环节失败都抛出带原因的异常，方便上层显示给用户排查。
      */
-    fun addMedia(file: File, preferredName: String): String? {
-        return try {
-            val authority = "${ctx.packageName}.fileprovider"
-            val uri = FileProvider.getUriForFile(ctx, authority, file)
-            AddContentApi.getAnkiDroidPackageName(ctx)?.let { pkg ->
-                ctx.grantUriPermission(pkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            val cv = ContentValues().apply {
-                put("file_uri", uri.toString())
-                put("preferred_name", preferredName)
-            }
-            val mediaUri = Uri.parse("content://com.ichi2.anki.flashcards/media")
-            ctx.contentResolver.insert(mediaUri, cv)?.lastPathSegment
-        } catch (e: Exception) {
-            null
+    fun addMedia(file: File, preferredName: String): String {
+        val authority = "${ctx.packageName}.fileprovider"
+        val uri = FileProvider.getUriForFile(ctx, authority, file)
+        val pkg = AddContentApi.getAnkiDroidPackageName(ctx)
+            ?: error("找不到 AnkiDroid")
+        ctx.grantUriPermission(pkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        val cv = ContentValues().apply {
+            put("file_uri", uri.toString())
+            put("preferred_name", preferredName)
         }
+        val mediaUri = Uri.parse("content://com.ichi2.anki.flashcards/media")
+        val ret = ctx.contentResolver.insert(mediaUri, cv)
+            ?: error("媒体写入返回空")
+        return ret.lastPathSegment ?: error("媒体返回无文件名")
     }
 
     /**
-     * 写入两条笔记（单词与词组通用）:
-     *   - 问答题  (正面=word, 背面=中文意思+KK音标+发音)  -> topDeck::问答
-     *   - 填空题+音频 (文字=意思音标+cloze, 单词=word, 背面额外=发音) -> topDeck::填空
-     * kk / meaning / sound 任意可为空。返回成功写入的笔记数（0/1/2）。
+     * 写入两条笔记（单词与词组通用）。把发音放进模型自带的「音频」字段，
+     * 中文意思+音标放「背面」/cloze 文字。kk / meaning / sound 任意可为空。
+     * 返回成功写入的笔记数（0/1/2）。
      */
     fun addWord(word: String, kk: String, meaning: String, sound: String, topDeck: String): Int {
         var ok = 0
@@ -93,27 +90,33 @@ class AnkiBridge(context: Context) {
 
         ensureModel(
             name = "问答题",
-            fields = arrayOf("正面", "背面"),
-            cards = arrayOf("卡片"),
-            qfmt = arrayOf("{{正面}}"),
-            afmt = arrayOf("{{FrontSide}}<hr id=answer>{{背面}}")
+            fields = arrayOf("正面", "背面", "音频", "音源", "图片"),
+            cards = arrayOf("卡片 1"),
+            qfmt = arrayOf("{{音频}}\n{{正面}}"),
+            afmt = arrayOf("{{正面}}\n{{音频}}\n<hr id=answer>\n{{背面}}")
         )?.let { (mid, fields) ->
-            val back = listOf(meaning, kk, soundTag).filter { it.isNotEmpty() }.joinToString("<br>")
-            val map = buildFields(fields, mapOf("正面" to word, "背面" to back))
+            val back = listOf(meaning, kk).filter { it.isNotEmpty() }.joinToString("<br>")
+            val map = buildFields(
+                fields,
+                mapOf("正面" to word, "背面" to back, "音频" to soundTag)
+            )
             val did = ensureDeck("$topDeck::问答")
             if (api.addNote(mid, did, map, setOf(topDeck)) != null) ok++
         }
 
         ensureModel(
             name = "填空题+音频",
-            fields = arrayOf("文字", "单词", "背面额外"),
-            cards = arrayOf("填空"),
-            qfmt = arrayOf("{{cloze:文字}}"),
-            afmt = arrayOf("{{cloze:文字}}<br>{{单词}}<br>{{背面额外}}")
+            fields = arrayOf("文字", "单词", "背面额外", "音频", "音源", "图片"),
+            cards = arrayOf("填空题"),
+            qfmt = arrayOf("{{cloze:文字}}<br>{{音频}}"),
+            afmt = arrayOf("{{cloze:文字}}<br>{{音频}}<br>{{背面额外}}")
         )?.let { (mid, fields) ->
             val prefix = listOf(meaning, kk).filter { it.isNotEmpty() }.joinToString(" ")
             val clozeText = if (prefix.isNotEmpty()) "$prefix ─ {{c1::$word}}" else "{{c1::$word}}"
-            val map = buildFields(fields, mapOf("文字" to clozeText, "单词" to word, "背面额外" to soundTag))
+            val map = buildFields(
+                fields,
+                mapOf("文字" to clozeText, "单词" to word, "音频" to soundTag)
+            )
             val did = ensureDeck("$topDeck::填空")
             if (api.addNote(mid, did, map, setOf(topDeck)) != null) ok++
         }

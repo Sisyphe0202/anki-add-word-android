@@ -27,7 +27,15 @@ object YoudaoFetcher {
         val arr = ec.optJSONArray("word") ?: return WordInfo("", "")
         if (arr.length() == 0) return WordInfo("", "")
         val w0 = arr.getJSONObject(0)
-        val ipa = w0.optString("usphone").ifEmpty { w0.optString("ukphone") }.trim()
+        val us = w0.optString("usphone").trim()
+        val uk = w0.optString("ukphone").trim()
+        // 词组：有道的美音常把分词连写（如 "hæv ərest"），转换会串成乱码；
+        // 优先选带空格、分词清晰的那版（通常是英音）。单词仍用美音优先。
+        val ipa = if (word.trim().contains(' ')) {
+            listOf(uk, us).firstOrNull { it.contains(' ') } ?: us.ifEmpty { uk }
+        } else {
+            us.ifEmpty { uk }
+        }
         val meaning = parseMeaning(w0.optJSONArray("trs"))
         return WordInfo(ipa, meaning)
     }
