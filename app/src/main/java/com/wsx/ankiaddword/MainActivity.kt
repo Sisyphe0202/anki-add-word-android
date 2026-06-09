@@ -27,6 +27,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSave: Button
     private lateinit var btnClear: Button
     private lateinit var btnRefreshDecks: Button
+    private lateinit var btnUpdate: Button
     private lateinit var tvStatus: TextView
     private lateinit var tvVersion: TextView
 
@@ -45,6 +46,7 @@ class MainActivity : AppCompatActivity() {
         btnSave = findViewById(R.id.btnSave)
         btnClear = findViewById(R.id.btnClear)
         btnRefreshDecks = findViewById(R.id.btnRefreshDecks)
+        btnUpdate = findViewById(R.id.btnUpdate)
         tvStatus = findViewById(R.id.tvStatus)
         tvVersion = findViewById(R.id.tvVersion)
         tvVersion.text = "v" + try { packageManager.getPackageInfo(packageName, 0).versionName } catch (e: Exception) { "?" }
@@ -53,6 +55,7 @@ class MainActivity : AppCompatActivity() {
         btnSave.setOnClickListener { doSave() }
         btnClear.setOnClickListener { doClear() }
         btnRefreshDecks.setOnClickListener { refreshDecks() }
+        btnUpdate.setOnClickListener { checkUpdate() }
 
         requestAnkiPermissionIfNeeded()
     }
@@ -163,6 +166,32 @@ class MainActivity : AppCompatActivity() {
             b.topLevelDecks().let {
                 acDeck.setAdapter(ArrayAdapter(this@MainActivity, android.R.layout.simple_dropdown_item_1line, it))
             }
+        }
+    }
+
+    private fun checkUpdate() {
+        status("检查更新中…")
+        lifecycleScope.launch {
+            val rel = try { withContext(Dispatchers.IO) { Updater.latest() } }
+                catch (e: Exception) { status("检查更新失败: ${e.message}", true); return@launch }
+            if (rel == null) { status("还没有可更新的版本", true); return@launch }
+            val cur = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "" }
+                catch (e: Exception) { "" }
+            if (!Updater.isNewer(rel.tag, cur)) { status("已是最新版 v$cur"); return@launch }
+            androidx.appcompat.app.AlertDialog.Builder(this@MainActivity)
+                .setTitle("发现新版本 ${rel.tag}")
+                .setMessage(rel.notes.ifEmpty { "点“更新”下载并安装新版本" })
+                .setPositiveButton("更新") { _, _ ->
+                    status("下载中…请稍候")
+                    lifecycleScope.launch {
+                        try {
+                            withContext(Dispatchers.IO) { Updater.downloadAndInstall(this@MainActivity, rel.apkUrl) }
+                            status("下载完成，按系统提示点“安装”即可")
+                        } catch (e: Exception) { status("更新失败: ${e.message}", true) }
+                    }
+                }
+                .setNegativeButton("以后再说", null)
+                .show()
         }
     }
 

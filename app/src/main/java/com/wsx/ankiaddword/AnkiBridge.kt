@@ -105,19 +105,19 @@ class AnkiBridge(context: Context) {
             if (api.addNote(mid, did, map, setOf(topDeck)) != null) ok++
         }
 
-        // 填空卡：正面只播放发音（{{音频}}），不显示文字
+        // 听写卡：正面只播放发音（{{音频}}）+ 输入框（{{type:单词}}），不显示任何文字提示。
+        // 听完声音把词/词组打进去，背面对照正确答案（打对绿色、打错红色）。
         ensureModel(
-            name = "填空题+音频",
-            fields = arrayOf("文字", "单词", "背面额外", "音频", "音源", "图片"),
-            cards = arrayOf("填空题"),
-            qfmt = arrayOf("{{音频}}"),
-            afmt = arrayOf("{{cloze:文字}}<br>{{音频}}<br>{{背面额外}}")
+            name = "听音拼词",
+            fields = arrayOf("单词", "释义", "音频", "音源", "图片"),
+            cards = arrayOf("听写"),
+            qfmt = arrayOf("{{音频}}<br>{{type:单词}}"),
+            afmt = arrayOf("{{音频}}<br>{{type:单词}}\n<hr id=answer>\n<b>{{单词}}</b><br>{{释义}}<br>{{音源}}")
         )?.let { (mid, fields) ->
-            val prefix = listOf(meaning, kk).filter { it.isNotEmpty() }.joinToString(" ")
-            val clozeText = if (prefix.isNotEmpty()) "$prefix ─ {{c1::$word}}" else "{{c1::$word}}"
+            val expl = listOf(meaning, kk).filter { it.isNotEmpty() }.joinToString("<br>")
             val map = buildFields(
                 fields,
-                mapOf("文字" to clozeText, "单词" to word, "音频" to soundTag, "音源" to badge)
+                mapOf("单词" to word, "释义" to expl, "音频" to soundTag, "音源" to badge)
             )
             val did = ensureDeck("$topDeck::填空")
             if (api.addNote(mid, did, map, setOf(topDeck)) != null) ok++
