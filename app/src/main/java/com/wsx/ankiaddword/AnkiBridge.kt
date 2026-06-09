@@ -84,9 +84,10 @@ class AnkiBridge(context: Context) {
      * 中文意思+音标放「背面」/cloze 文字。kk / meaning / sound 任意可为空。
      * 返回成功写入的笔记数（0/1/2）。
      */
-    fun addWord(word: String, kk: String, meaning: String, sound: String, topDeck: String): Int {
+    fun addWord(word: String, kk: String, meaning: String, sound: String, source: String, topDeck: String): Int {
         var ok = 0
         val soundTag = if (sound.isNotEmpty()) "[sound:$sound]" else ""
+        val badge = AudioFetcher.badge(source)
 
         ensureModel(
             name = "问答题",
@@ -98,24 +99,25 @@ class AnkiBridge(context: Context) {
             val back = listOf(meaning, kk).filter { it.isNotEmpty() }.joinToString("<br>")
             val map = buildFields(
                 fields,
-                mapOf("正面" to word, "背面" to back, "音频" to soundTag)
+                mapOf("正面" to word, "背面" to back, "音频" to soundTag, "音源" to badge)
             )
             val did = ensureDeck("$topDeck::问答")
             if (api.addNote(mid, did, map, setOf(topDeck)) != null) ok++
         }
 
+        // 填空卡：正面只播放发音（{{音频}}），不显示文字
         ensureModel(
             name = "填空题+音频",
             fields = arrayOf("文字", "单词", "背面额外", "音频", "音源", "图片"),
             cards = arrayOf("填空题"),
-            qfmt = arrayOf("{{cloze:文字}}<br>{{音频}}"),
+            qfmt = arrayOf("{{音频}}"),
             afmt = arrayOf("{{cloze:文字}}<br>{{音频}}<br>{{背面额外}}")
         )?.let { (mid, fields) ->
             val prefix = listOf(meaning, kk).filter { it.isNotEmpty() }.joinToString(" ")
             val clozeText = if (prefix.isNotEmpty()) "$prefix ─ {{c1::$word}}" else "{{c1::$word}}"
             val map = buildFields(
                 fields,
-                mapOf("文字" to clozeText, "单词" to word, "音频" to soundTag)
+                mapOf("文字" to clozeText, "单词" to word, "音频" to soundTag, "音源" to badge)
             )
             val did = ensureDeck("$topDeck::填空")
             if (api.addNote(mid, did, map, setOf(topDeck)) != null) ok++

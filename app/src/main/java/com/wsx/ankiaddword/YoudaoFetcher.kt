@@ -66,15 +66,52 @@ object YoudaoFetcher {
         return outs.joinToString("；")
     }
 
-    /** 下载有道发音(美音 type=2)到文件；成功返回 true */
-    fun downloadAudio(word: String, out: File): Boolean {
-        return try {
-            val url = URL("https://dict.youdao.com/dictvoice?audio=${enc(word)}&type=2")
-            open(url).inputStream.use { input -> out.outputStream().use { input.copyTo(it) } }
-            out.length() > 0
-        } catch (e: Exception) {
-            false
+    private fun open(url: URL): HttpURLConnection =
+        (url.openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            setRequestProperty("User-Agent", "Mozilla/5.0")
+            connectTimeout = 8000
+            readTimeout = 12000
         }
+}
+
+/**
+ * 发音抓取：优先走自家服务器（单词剑桥/韦氏真人、词组 Edge 高质量合成），
+ * 失败回退有道。返回发音来源标签（cambridge/mw/tts/youdao），失败返回 ""。
+ */
+object AudioFetcher {
+    private const val SERVER = "http://38.143.19.180:8092/audio"
+    private const val TOKEN = "tCyrij3EPTWDaRbx"
+
+    fun fetch(word: String, out: File): String {
+        val enc = URLEncoder.encode(word, "UTF-8")
+        // 1) 自家服务器
+        try {
+            val conn = open(URL("$SERVER?q=$enc&k=$TOKEN"))
+            if (conn.responseCode == 200) {
+                val src = conn.getHeaderField("X-Audio-Source") ?: "tts"
+                conn.inputStream.use { i -> out.outputStream().use { i.copyTo(it) } }
+                if (out.length() > 0) return src
+            } else {
+                conn.disconnect()
+            }
+        } catch (e: Exception) { /* 落到回退 */ }
+        // 2) 有道兜底
+        try {
+            open(URL("https://dict.youdao.com/dictvoice?audio=$enc&type=2"))
+                .inputStream.use { i -> out.outputStream().use { i.copyTo(it) } }
+            if (out.length() > 0) return "youdao"
+        } catch (e: Exception) { /* 失败 */ }
+        return ""
+    }
+
+    /** 来源标签 -> 卡片「音源」字段的徽章 */
+    fun badge(src: String): String = when (src) {
+        "cambridge" -> "🎙️剑桥"
+        "mw" -> "🎙️韦氏"
+        "youdao" -> "🔊有道"
+        "tts" -> "🔊合成"
+        else -> ""
     }
 
     private fun open(url: URL): HttpURLConnection =
@@ -82,6 +119,6 @@ object YoudaoFetcher {
             requestMethod = "GET"
             setRequestProperty("User-Agent", "Mozilla/5.0")
             connectTimeout = 8000
-            readTimeout = 8000
+            readTimeout = 15000
         }
 }

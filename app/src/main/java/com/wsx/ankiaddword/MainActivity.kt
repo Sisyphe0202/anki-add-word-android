@@ -128,15 +128,17 @@ class MainActivity : AppCompatActivity() {
         }
         status("保存中…")
         lifecycleScope.launch {
-            // 下载发音并加入 AnkiDroid 媒体库；失败记下原因但不阻断保存
+            // 取发音(服务器真人/合成,有道兜底)并加入媒体库；失败记原因但不阻断
             var sound = ""
+            var source = ""
             var audioErr = ""
             withContext(Dispatchers.IO) {
                 try {
                     val safe = word.replace(Regex("[^A-Za-z0-9]+"), "_").trim('_').ifEmpty { "word" }
                     val f = File(cacheDir, "yd_$safe.mp3")
-                    if (!YoudaoFetcher.downloadAudio(word, f)) {
-                        audioErr = "发音下载失败(网络?)"
+                    source = AudioFetcher.fetch(word, f)
+                    if (source.isEmpty()) {
+                        audioErr = "发音获取失败(网络?)"
                     } else {
                         sound = b.addMedia(f, "yd_$safe")
                     }
@@ -144,9 +146,9 @@ class MainActivity : AppCompatActivity() {
                     audioErr = "${e.javaClass.simpleName}: ${e.message}"
                 }
             }
-            val n = try { withContext(Dispatchers.IO) { b.addWord(word, kk, meaning, sound, top) } }
+            val n = try { withContext(Dispatchers.IO) { b.addWord(word, kk, meaning, sound, source, top) } }
                 catch (e: Exception) { status("保存失败: ${e.message}", true); return@launch }
-            val audioNote = if (sound.isNotEmpty()) "（含发音）" else "（无发音: $audioErr）"
+            val audioNote = if (sound.isNotEmpty()) "（${AudioFetcher.badge(source)}）" else "（无发音: $audioErr）"
             when (n) {
                 2 -> {
                     status("✓ $word 已存入 $top::问答 和 $top::填空 $audioNote")
