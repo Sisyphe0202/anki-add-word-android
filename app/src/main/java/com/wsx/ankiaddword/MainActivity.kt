@@ -28,6 +28,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnClear: Button
     private lateinit var btnRefreshDecks: Button
     private lateinit var tvStatus: TextView
+    private lateinit var tvVersion: TextView
 
     private val ankiPerm = "com.ichi2.anki.permission.READ_WRITE_DATABASE"
     private var bridge: AnkiBridge? = null
@@ -45,6 +46,8 @@ class MainActivity : AppCompatActivity() {
         btnClear = findViewById(R.id.btnClear)
         btnRefreshDecks = findViewById(R.id.btnRefreshDecks)
         tvStatus = findViewById(R.id.tvStatus)
+        tvVersion = findViewById(R.id.tvVersion)
+        tvVersion.text = "v" + try { packageManager.getPackageInfo(packageName, 0).versionName } catch (e: Exception) { "?" }
 
         btnFetch.setOnClickListener { doFetch() }
         btnSave.setOnClickListener { doSave() }
@@ -138,7 +141,7 @@ class MainActivity : AppCompatActivity() {
                     val f = File(cacheDir, "yd_$safe.mp3")
                     source = AudioFetcher.fetch(word, f)
                     if (source.isEmpty()) {
-                        audioErr = "发音获取失败(网络?)"
+                        audioErr = AudioFetcher.lastError.ifEmpty { "发音获取失败(网络?)" }
                     } else {
                         sound = b.addMedia(f, "yd_$safe")
                     }

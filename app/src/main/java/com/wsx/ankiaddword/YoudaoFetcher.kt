@@ -83,25 +83,35 @@ object AudioFetcher {
     private const val SERVER = "http://38.143.19.180:8092/audio"
     private const val TOKEN = "tCyrij3EPTWDaRbx"
 
+    /** 最近一次 fetch 失败的真实原因；成功时为空。用于界面排查。 */
+    var lastError: String = ""
+        private set
+
     fun fetch(word: String, out: File): String {
         val enc = URLEncoder.encode(word, "UTF-8")
+        val errs = StringBuilder()
         // 1) 自家服务器
         try {
             val conn = open(URL("$SERVER?q=$enc&k=$TOKEN"))
-            if (conn.responseCode == 200) {
+            val code = conn.responseCode
+            if (code == 200) {
                 val src = conn.getHeaderField("X-Audio-Source") ?: "tts"
                 conn.inputStream.use { i -> out.outputStream().use { i.copyTo(it) } }
-                if (out.length() > 0) return src
+                if (out.length() > 0) { lastError = ""; return src }
+                errs.append("服务器:空文件; ")
             } else {
+                errs.append("服务器:HTTP$code; ")
                 conn.disconnect()
             }
-        } catch (e: Exception) { /* 落到回退 */ }
+        } catch (e: Exception) { errs.append("服务器:${e.javaClass.simpleName}:${e.message}; ") }
         // 2) 有道兜底
         try {
             open(URL("https://dict.youdao.com/dictvoice?audio=$enc&type=2"))
                 .inputStream.use { i -> out.outputStream().use { i.copyTo(it) } }
-            if (out.length() > 0) return "youdao"
-        } catch (e: Exception) { /* 失败 */ }
+            if (out.length() > 0) { lastError = ""; return "youdao" }
+            errs.append("有道:空文件; ")
+        } catch (e: Exception) { errs.append("有道:${e.javaClass.simpleName}:${e.message}; ") }
+        lastError = errs.toString().trim()
         return ""
     }
 
