@@ -11,13 +11,31 @@ android {
         applicationId = "com.wsx.ankiaddword"
         minSdk = 24
         targetSdk = 34
-        versionCode = 6
-        versionName = "1.5"
+        versionCode = 7
+        versionName = "1.6"
+    }
+
+    // CI 提供固定签名时使用它（保证每次构建“身份指纹”一致，APP 内更新才能覆盖安装）；
+    // 本地无环境变量时回退到默认 debug 签名。
+    val ksFile = System.getenv("KEYSTORE_FILE")
+    signingConfigs {
+        if (!ksFile.isNullOrEmpty()) {
+            create("fixed") {
+                storeFile = file(ksFile)
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
+        getByName("debug") {
+            if (!ksFile.isNullOrEmpty()) signingConfig = signingConfigs.getByName("fixed")
+        }
         release {
             isMinifyEnabled = false
+            if (!ksFile.isNullOrEmpty()) signingConfig = signingConfigs.getByName("fixed")
         }
     }
 
